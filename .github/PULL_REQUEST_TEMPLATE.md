@@ -1,6 +1,6 @@
 <!--
 Before opening your pull request, have a quick look at our contribution guidelines:
-https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md
+https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md
 
 Consider adding a preview image of your submission using:
 https://simpleicons.org/preview
@@ -11,7 +11,7 @@ https://simpleicons.org/preview
 **Popularity metric:**
 
 <!--
-Regardless of whether or not the linked issue (if there is one) has a metric, please include the metric here for PR reviewers to validate. See our contributing guidelines at https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#assessing-popularity for more details on how we assess a brand's popularity.
+Regardless of whether or not the linked issue (if there is one) has a metric, please include the metric here for PR reviewers to validate. See our contributing guidelines at https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#assessing-popularity for more details on how we assess a brand's popularity.
 -->
 
 **Terms of Service link:**
@@ -22,7 +22,7 @@ As part of the checklist below, you acknowledge you have reviewed the terms of s
 
 ### Checklist
 
-- [ ] I have reviewed the [forbidden brands](https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#forbidden-brands) list and confirm the brand I am submitting a PR for is not one of them, nor is it a subsidiary of one of those brands
+- [ ] I have reviewed the [forbidden brands](https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#forbidden-brands) list and confirm the brand I am submitting a PR for is not one of them, nor is it a subsidiary of one of those brands
 - [ ] I have reviewed the brand's terms of service, and am confident we can add this icon
 - [ ] I confirm that I did not use AI tools to create this PR, or that any AI assistance has been fully disclosed in this PR
 - [ ] I updated the JSON data in `data/simple-icons.json`

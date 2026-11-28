@@ -29,7 +29,7 @@ Simple Icons welcomes contributions and corrections. Before contributing, please
      gh repo clone simple-icons/simple-icons -- --filter=tree:0
      ```
 
-1. Create a new branch from the latest `develop`
+1. Create a new branch from the latest `main`
 1. Start hacking on the new branch
 1. Commit and push to the new branch
 1. Make a pull request
@@ -179,7 +179,7 @@ If the icon includes a (registered) trademark icon we follow the guidelines belo
 - If brand guidelines say it _may_ be removed, usually when the icon is displayed at small sizes, it must not be included.
 - If there is no explicit requirement that a symbol must be included, it must not be included.
 
-[Chupa Chups]: https://github.com/simple-icons/simple-icons/blob/develop/icons/chupachups.svg
+[Chupa Chups]: https://github.com/simple-icons/simple-icons/blob/HEAD/icons/chupachups.svg
 
 #### Color Guidelines
 

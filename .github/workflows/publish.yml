@@ -1,150 +1,158 @@
 name: Publish Releases
 on:
-  push:
-    branches:
-      - master
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
 
 jobs:
   sanity-check:
     name: Pre-publish checks
+    if: |
+      github.repository == 'simple-icons/simple-icons' &&
+      github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'release/next' &&
+      github.event.pull_request.user.login == 'simple-icons[bot]' &&
+      github.event.pull_request.merged_by.login == 'simple-icons[bot]' &&
+      contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Use Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 3
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           cache: npm
-          cache-dependency-path: '**/package-lock.json'
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Run linters
-        run: node --run lint
-      - name: Build Node.js package
-        run: node --run build
-      - name: Run tests
-        run: node --run test
+      - id: version
+        uses: ./.github/actions/get-version
+      - name: Verify the reviewed tree and release version
+        env:
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          [[ "$(git rev-parse HEAD^2)" == "$REVIEWED_HEAD" ]]
+          [[ "$(git rev-parse HEAD^1)" == "$(git rev-parse HEAD^2^1)" ]]
+          git diff --exit-code HEAD^2 HEAD --
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$(git log -1 --format=%s)" == "Release $VERSION" ]]
+          [[ "$(node -p 'require("./package-lock.json").version')" == "$VERSION" ]]
+      - run: npm ci --no-audit --no-fund
+      - run: node --run lint
+      - run: node --run build
+      - run: node --run test
   npm:
     name: NPM Package
     needs: sanity-check
+    concurrency: npm-${{ needs.sanity-check.outputs.version }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # for OIDC authentication
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Use Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
-      - id: get-version
-        uses: ./.github/actions/get-version
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Reformat to regular markdown
-        run: node scripts/release/reformat-markdown.js
-      - name: Update SDK Typescript definitions
-        run: node scripts/release/update-sdk-ts-defs.js
-      - name: Minify icons data file
-        run: node scripts/release/minify-icons-data.js
-      - name: Build Node.js package
-        run: node --run build
-      - name: Deploy to NPM
-        run: npm publish
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare the npm package
+        run: |
+          node scripts/release/reformat-markdown.js
+          node scripts/release/update-sdk-ts-defs.js
+          node scripts/release/minify-icons-data.js
+          node --run build
+          npm pack --quiet --pack-destination "$RUNNER_TEMP"
+      - name: Publish the verified tarball
+        env:
+          VERSION: ${{ needs.sanity-check.outputs.version }}
+        run: |
+          tarball="$RUNNER_TEMP/simple-icons-$VERSION.tgz"
+          integrity="sha512-$(openssl dgst -sha512 -binary "$tarball" | openssl base64 -A)"
+          metadata="$RUNNER_TEMP/registry.json"
+          status=$(curl --silent --show-error --retry 3 --output "$metadata" --write-out '%{http_code}' \
+            "https://registry.npmjs.org/simple-icons/$VERSION")
+          case "$status" in
+            404) npm publish "$tarball" ;;
+            200) [[ "$(jq -er '.dist.integrity' "$metadata")" == "$integrity" ]] ;;
+            *) echo "::error::npm registry returned HTTP $status"; exit 1 ;;
+          esac
   github:
     name: GitHub release
-    needs: sanity-check
+    needs: [sanity-check, npm]
+    concurrency: github-release-${{ needs.sanity-check.outputs.version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           client-id: ${{ secrets.BOT_CLIENT_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Get commit message (for release title and body)
-        id: commit
-        uses: kceb/git-message-action@v3
-      - id: get-version
-        uses: ./.github/actions/get-version
-      - name: Reformat to regular markdown
-        run: node scripts/release/reformat-markdown.js
-      - name: Configure GIT credentials
+      - name: Create the formatted tag and GitHub release
+        id: release
+        env:
+          VERSION: ${{ needs.sanity-check.outputs.version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git config user.name "simple-icons[bot]"
-          git config user.email "simple-icons[bot]@users.noreply.github.com"
-      # Commit that will only be included in the tag
-      - name: Commit CDN theme image links removal
-        run: |
+          git log -1 --format=%B > "$RUNNER_TEMP/tag-message"
+          git log -1 --format=%b > "$RUNNER_TEMP/notes.md"
+          node scripts/release/reformat-markdown.js
           git add README.md
-          git commit -m 'Replace README CDN theme image links'
-      - name: Create and push git tag
-        run: |
-          set -e
-          tag="${{ steps.get-version.outputs.version }}"
-          git tag -a "${tag}" -m "$GIT_MESSAGE"
-          git push origin "${tag}"
-        env:
-          GIT_MESSAGE: ${{ steps.commit.outputs.git-message }}
-      - name: Create release
-        uses: softprops/action-gh-release@v3
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          tag_name: ${{ steps.get-version.outputs.version }}
-          name: ${{ steps.commit.outputs.title }}
-          body: ${{ steps.commit.outputs.body }}
+          if git show-ref --verify --quiet "refs/tags/$VERSION"; then
+            [[ "$(git rev-parse "refs/tags/$VERSION^")" == "$(git rev-parse HEAD)" ]]
+            [[ "$(git rev-parse "refs/tags/$VERSION^{tree}")" == "$(git write-tree)" ]]
+          else
+            git config user.name 'simple-icons[bot]'
+            git config user.email 'simple-icons[bot]@users.noreply.github.com'
+            git commit --allow-empty -m 'Replace README CDN theme image links'
+            git tag -a "$VERSION" -F "$RUNNER_TEMP/tag-message"
+            git push origin "refs/tags/$VERSION"
+          fi
+          if gh release view "$VERSION" --json name,isDraft,isPrerelease > "$RUNNER_TEMP/release.json"; then
+            jq -e --arg title "Release $VERSION" '.name == $title and (.isDraft or .isPrerelease | not)' "$RUNNER_TEMP/release.json"
+          else
+            gh release create "$VERSION" --verify-tag --title "Release $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Send release to Discord
-        run: node scripts/release/discord-release-message.js "${{ steps.get-version.outputs.version }}"
+        if: steps.release.outputs.created == 'true'
+        run: node scripts/release/discord-release-message.js "$VERSION"
         env:
+          VERSION: ${{ needs.sanity-check.outputs.version }}
           DISCORD_RELEASES_ROLE_ID: ${{ secrets.DISCORD_RELEASES_ROLE_ID }}
           DISCORD_RELEASES_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
         continue-on-error: true
-  font:
-    name: Trigger simple-icons-font release
-    needs: npm
+  downstream:
+    name: Trigger ${{ matrix.repository }}
+    needs: [npm, github]
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: [simple-icons-font, simple-icons-website-rs]
     steps:
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           client-id: ${{ secrets.BOT_CLIENT_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          repositories: 'simple-icons-font'
-      - name: Trigger simple-icons-font release
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
-            -d '{"ref":"develop"}' \
-            https://api.github.com/repos/simple-icons/simple-icons-font/actions/workflows/auto-release.yml/dispatches
-  # The current simpleicons.org website is maintained at https://github.com/LitoMore/simpleicons.org.
-  website:
-    name: Trigger legacy simple-icons-website-rs deployment
-    needs: npm
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          client-id: ${{ secrets.BOT_CLIENT_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          repositories: 'simple-icons-website-rs'
-      - name: Trigger legacy simple-icons-website-rs deployment
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
-            -d '{"ref":"master"}' \
-            https://api.github.com/repos/simple-icons/simple-icons-website-rs/actions/workflows/auto-release.yml/dispatches
+          repositories: ${{ matrix.repository }}
+      - name: Dispatch the receiver's default branch
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: simple-icons/${{ matrix.repository }}
+        run: gh workflow run auto-release.yml

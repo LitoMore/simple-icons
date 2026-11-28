@@ -10,6 +10,9 @@ import path from 'node:path';
 
 const rootDirectory = path.resolve(import.meta.dirname, '..', '..');
 const readmeFile = path.resolve(rootDirectory, 'README.md');
+const {version} = JSON.parse(
+	await readFile(path.join(rootDirectory, 'package.json'), 'utf8'),
+);
 const disclaimerFile = path.resolve(rootDirectory, 'DISCLAIMER.md');
 
 /**
@@ -21,6 +24,11 @@ const reformat = async (filePath) => {
 	await writeFile(
 		filePath,
 		fileContent
+			// Link released copies of the slug table to their matching version.
+			.replaceAll(
+				'https://github.com/simple-icons/simple-icons/blob/HEAD/slugs.md',
+				`https://github.com/simple-icons/simple-icons/blob/${version}/slugs.md`,
+			)
 			// Add &nbsp; spaces after icons that are inside a CDN link before text
 			// Fixes rendering in npmjs.com and packagist.org
 			// Reference: https://github.com/simple-icons/simple-icons/pull/14248

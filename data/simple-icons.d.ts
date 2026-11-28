@@ -20,7 +20,7 @@ export type IconData = {
  * The aliases for a Simple Icon.
  *
  * Corresponds to the `aliases` property in the *data/simple-icons.json* file.
- * @see {@link https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#aliases Aliases}
+ * @see {@link https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#aliases Aliases}
  */
 export type Aliases = {
 	aka?: string[];
@@ -38,7 +38,7 @@ export type DuplicateAlias = {
 
 /**
  * The license for a Simple Icon.
- * @see {@link https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#optional-data Optional Data}
+ * @see {@link https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#optional-data Optional Data}
  */
 export type License = SPDXLicense | CustomLicense;
 

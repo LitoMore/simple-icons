@@ -3,8 +3,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
-      - develop
+      - main
 
 jobs:
   build:
@@ -41,9 +40,15 @@ jobs:
           cache: npm
           cache-dependency-path: '**/package-lock.json'
       - name: Is normal pull request
-        # check if is not a release pull request
         id: pr
-        run: echo "is_normal=$(echo ${{ github.base_ref != 'master' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'meta') == false }})" >> $GITHUB_OUTPUT
+        env:
+          IS_NORMAL: |-
+            ${{ github.event_name == 'pull_request' &&
+                !contains(github.event.pull_request.labels.*.name, 'meta') &&
+                !(github.event.pull_request.user.login == 'simple-icons[bot]' &&
+                  github.event.pull_request.head.repo.full_name == github.repository &&
+                  github.head_ref == 'release/next') }}
+        run: echo "is_normal=$IS_NORMAL" >> "$GITHUB_OUTPUT"
       - name: Detect changed files
         uses: dorny/paths-filter@v4
         id: changes
@@ -90,7 +95,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: -- ${{ steps.changes.outputs.docs_files }}
-          fail: ${{ github.ref != 'refs/heads/develop' }}
+          fail: ${{ github.ref != 'refs/heads/main' }}
           failIfEmpty: false
           jobSummary: true
           format: markdown

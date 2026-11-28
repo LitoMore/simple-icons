@@ -38,7 +38,7 @@ body:
         this to "None" if you are unable to find any resources.
       placeholder: |
         Example:
-        svg: https://github.com/simple-icons/simple-icons/blob/develop/icons/simpleicons.svg
+        svg: https://github.com/simple-icons/simple-icons/blob/HEAD/icons/simpleicons.svg
         color: `#111111`, from the website header
     validations:
       required: true

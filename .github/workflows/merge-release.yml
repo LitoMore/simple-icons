@@ -3,18 +3,51 @@ on:
   pull_request_review:
     types: [submitted]
 
+permissions: {}
+
 jobs:
   release:
+    if: |
+      github.repository == 'simple-icons/simple-icons' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'release/next' &&
+      github.event.pull_request.user.login == 'simple-icons[bot]' &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      github.event.review.state == 'approved' &&
+      contains(fromJSON('["OWNER","MEMBER"]'), github.event.review.author_association) &&
+      github.event.review.commit_id == github.event.pull_request.head.sha
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    permissions:
-      pull-requests: write
+    timeout-minutes: 30
     steps:
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           client-id: ${{ secrets.BOT_CLIENT_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-      - uses: simple-icons/release-action@v3
-        with:
-          repo-token: ${{ steps.app-token.outputs.token }}
+      - name: Merge the reviewed release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.review.commit_id }}
+          REVIEWER: ${{ github.event.review.user.login }}
+        run: |
+          gh pr checks "$PR" --required --watch --fail-fast
+          gh pr view "$PR" --json title,body,headRefOid,latestReviews,labels > "$RUNNER_TEMP/pr.json"
+          jq -e --arg sha "$HEAD_SHA" --arg reviewer "$REVIEWER" '
+            .headRefOid == $sha and any(.labels[]; .name == "release") and
+            any(.latestReviews[]; .author.login == $reviewer and .state == "APPROVED")
+          ' "$RUNNER_TEMP/pr.json" > /dev/null
+          title=$(jq -r .title "$RUNNER_TEMP/pr.json")
+          [[ "$title" =~ ^Release\ [0-9]+\.[0-9]+\.[0-9]+$ ]]
+          base=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if ! gh api "repos/$GH_REPO/commits/$HEAD_SHA" | jq -e --arg base "$base" --arg bump "Bump version to ${title#Release }" '
+            .parents[0].sha == $base and (.commit.message | split("\n") |
+              .[0] == $bump and index("Release base: " + $base) != null)
+          ' > /dev/null; then
+            echo "::error::Release version or base changed. Run Create Release Pull Request again and review the refreshed candidate."
+            exit 1
+          fi
+          jq -r .body "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/notes.md"
+          gh pr merge "$PR" --repo "$GH_REPO" --merge --delete-branch --match-head-commit "$HEAD_SHA" --subject "$title" --body-file "$RUNNER_TEMP/notes.md"

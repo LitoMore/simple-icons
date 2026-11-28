@@ -43,9 +43,9 @@ Should a brand wish for their icon to be removed from the package, contact `remo
 
 The pull request of icon removal must be submitted by the Simple Icons maintainer.
 
-[meet our criteria]: https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#requesting-an-icon
+[meet our criteria]: https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#requesting-an-icon
 [icon-outdated-issues]: https://github.com/simple-icons/simple-icons/issues/new?assignees=&labels=update+icon%2Fdata&template=icon_update.yml&title=Update%3A+
 [removal-issues]: https://github.com/simple-icons/simple-icons/issues/new?assignees=&labels=breaking+change&template=icon_removal.yml&title=Remove%3A+
-[the simple icons contributing guidelines]: https://github.com/simple-icons/simple-icons/blob/develop/CONTRIBUTING.md#icon-guidelines
+[the simple icons contributing guidelines]: https://github.com/simple-icons/simple-icons/blob/HEAD/CONTRIBUTING.md#icon-guidelines
 [the simple icons github repository]: https://github.com/simple-icons/simple-icons
 [the simple icons website]: https://simpleicons.org/
